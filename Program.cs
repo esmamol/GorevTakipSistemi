@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using GorevTakipSistemi.Data;
-using GorevTakipSistemi.Models; 
+using GorevTakipSistemi.Models;
+using Microsoft.AspNetCore.Authentication.Cookies; 
 
 namespace GorevTakipSistemi
 {
@@ -12,13 +13,23 @@ namespace GorevTakipSistemi
 
             builder.Services.AddControllersWithViews();
 
-           
+            // KÝMLÝK DOÐRULAMA SERVÝSLERÝ
+            builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+                .AddCookie(options =>
+                {
+                    options.LoginPath = "/Account/Login"; 
+                    options.AccessDeniedPath = "/Account/AccessDenied"; // Yetkisiz eriþim sayfasý 
+                    options.ExpireTimeSpan = TimeSpan.FromMinutes(30); // Oturum süresi
+                    options.SlidingExpiration = true; // Oturumun otomatik uzamasý
+                });
+
             builder.Services.AddDbContext<ApplicationDbContext>(options =>
                 options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 
             var app = builder.Build();
 
+           
             if (!app.Environment.IsDevelopment())
             {
                 app.UseExceptionHandler("/Home/Error");
@@ -30,7 +41,9 @@ namespace GorevTakipSistemi
 
             app.UseRouting();
 
-            app.UseAuthorization();
+            
+            app.UseAuthentication(); //Önce kimlik doðrulamasý
+            app.UseAuthorization();  //Sonra Yetkilendirme
 
             app.MapControllerRoute(
                 name: "default",

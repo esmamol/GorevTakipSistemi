@@ -1,6 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using GorevTakipSistemi.Models; // Modellerinin ve UserRole enum'ının olduğu namespace'i ekliyoruz
-// using System.Threading.Tasks; // BU SATIRI SİLMEN GEREKİYOR!
+using GorevTakipSistemi.Models; 
+using System.Threading.Tasks; 
 
 namespace GorevTakipSistemi.Data
 {
