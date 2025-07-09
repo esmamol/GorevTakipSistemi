@@ -1,18 +1,13 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Authorization;
-using System.Security.Claims; 
+﻿using Microsoft.AspNetCore.Authorization; // Bu using'i ekleyin
+using Microsoft.AspNetCore.Mvc;
+
 namespace GorevTakipSistemi.Controllers
 {
-
-    [Authorize(Roles = "User")]
+    [Authorize(Roles = "User")] // Sadece User rolüne sahip kullanıcılar erişebilir
     public class UserController : Controller
     {
-        // GET: /User/Index
         public IActionResult Index()
         {
-            
-            ViewData["Username"] = User.Identity.Name;
-
             return View();
         }
     }

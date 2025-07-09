@@ -1,9 +1,11 @@
 using GorevTakipSistemi.Models;
+using Microsoft.AspNetCore.Authorization; 
 using Microsoft.AspNetCore.Mvc;
 using System.Diagnostics;
 
 namespace GorevTakipSistemi.Controllers
 {
+    [Authorize] // Giriþ yapmýþ herkes (Admin ve User) eriþebilir
     public class HomeController : Controller
     {
         private readonly ILogger<HomeController> _logger;

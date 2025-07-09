@@ -1,0 +1,122 @@
+﻿@model GorevTakipSistemi.Models.Task
+
+@{
+    ViewData["Title"] = "Görevi Düzenle";
+    bool isAdmin = User.IsInRole("Admin");
+}
+
+<h1>Görevi Düzenle</h1>
+
+<h4>Görev</h4>
+<hr />
+
+@* Hata mesajlarını göstermek için eklendi *@
+@if (TempData["ErrorMessage"] != null)
+{
+    <div class="alert alert-danger" role="alert">
+        @Html.Raw(TempData["ErrorMessage"])
+    </div>
+}
+
+@* Başarı mesajlarını göstermek için eklendi *@
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success" role="alert">
+        @TempData["SuccessMessage"]
+    </div>
+}
+
+<div class="row">
+    <div class="col-md-4">
+        <form asp-action="Edit">
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            <input type="hidden" asp-for="Id" />
+
+            @* Admin rolündeyse AssignedUserId'yi hidden olarak gönderme, çünkü select kutusu kullanılacak.
+            User rolündeyse AssignedUserId'yi hidden olarak gönder, çünkü readonly olarak gösteriliyor. *@
+            @if (!isAdmin)
+            {
+                <input type="hidden" asp-for="AssignedUserId" />
+            }
+
+            <div class="form-group">
+                <label asp-for="Title" class="control-label"></label>
+                @if (isAdmin)
+                {
+                    <input asp-for="Title" class="form-control" />
+                }
+                else
+                {
+                    <input asp-for="Title" class="form-control" readonly />
+                }
+                <span asp-validation-for="Title" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <label asp-for="Description" class="control-label"></label>
+                @if (isAdmin)
+                {
+                    <textarea asp-for="Description" class="form-control"></textarea>
+                }
+                else
+                {
+                    <textarea asp-for="Description" class="form-control" readonly></textarea>
+                }
+                <span asp-validation-for="Description" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <label asp-for="Status" class="control-label"></label>
+                @if (isAdmin)
+                {
+                    @* Admin sadece görebilir: input type="text" ile *@
+                    <input asp-for="Status" class="form-control" readonly />
+                }
+                else
+                {
+                    @* User değiştirebilir: select ile *@
+                    <select asp-for="Status" class="form-control">
+                        <option value="Beklemede">Beklemede</option>
+                        <option value="İşleme Alındı">İşleme Alındı</option>
+                        <option value="Tamamlandı">Tamamlandı</option>
+                    </select>
+                }
+                <span asp-validation-for="Status" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <label asp-for="AssignedUser.Username" class="control-label">Atanan Kullanıcı</label>
+                @if (isAdmin)
+                {
+                    @* Admin atanan kullanıcıyı seçebilir *@
+                    <select asp-for="AssignedUserId" class="form-control" asp-items="ViewBag.AssignedUserId">
+                        <option value="">-- Kullanıcı Seçin --</option> @* Varsayılan boş seçenek *@
+                    </select>
+                }
+                else
+                {
+                    @* Kullanıcı sadece atanan kullanıcıyı metin olarak görebilir *@
+                    @if (Model.AssignedUser != null)
+                    {
+                        <input type="text" class="form-control" value="@Model.AssignedUser.Username" readonly />
+                    }
+                    else
+                    {
+                        <input type="text" class="form-control" value="Atanmamış" readonly />
+                    }
+                }
+                <span asp-validation-for="AssignedUserId" class="text-danger"></span>
+            </div>
+            <div class="form-group mt-3">
+                <input type="submit" value="Kaydet" class="btn btn-primary" />
+            </div>
+        </form>
+    </div>
+</div>
+
+<div>
+    <a asp-action="Index" class="btn btn-secondary mt-3">Listeye Geri Dön</a>
+</div>
+
+@section Scripts {
+    @{
+        await Html.RenderPartialAsync("_ValidationScriptsPartial");
+    }
+}

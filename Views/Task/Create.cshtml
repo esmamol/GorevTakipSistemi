@@ -25,7 +25,8 @@
 
             <div class="form-group mb-3">
                 <label asp-for="AssignedUserId" class="control-label"></label>
-                <select asp-for="AssignedUserId" class="form-control" asp-items="ViewBag.Users as SelectList">
+                @* Düzeltme burada yapıldı: asp-items artık ViewBag.AssignedUserId kullanıyor *@
+                <select asp-for="AssignedUserId" class="form-control" asp-items="ViewBag.AssignedUserId">
                     <option value="">-- Kullanıcı Seçin --</option>
                 </select>
                 <span asp-validation-for="AssignedUserId" class="text-danger"></span>
