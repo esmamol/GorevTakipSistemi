@@ -1,15 +1,44 @@
-﻿namespace GorevTakipSistemi.Models
+﻿using System;
+using System.Collections.Generic;  
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+
+namespace GorevTakipSistemi.Models
 {
     public class Task
     {
-        public int Id { get; set; } 
+        public int Id { get; set; }
+
+        [Required(ErrorMessage = "Başlık alanı zorunludur.")]
+        [StringLength(100, ErrorMessage = "Başlık en fazla 100 karakter olabilir.")]
         public string Title { get; set; }
-        public string Description { get; set; } // Görev açıklaması
-        public string Status { get; set; } // Görev durumu (Beklemede, İşleme Alındı, Tamamlandı)
 
-        public int AssignedUserId { get; set; } // Görevin atandığı kullanıcının ID'si
+        [Required(ErrorMessage = "Açıklama alanı zorunludur.")]
+        public string Description { get; set; }
 
+        [Required(ErrorMessage = "Durum alanı zorunludur.")]
+        public string Status { get; set; } // Beklemede, İşleme Alındı, Tamamlandı 
 
+        [Display(Name = "Atanan Kullanıcı")]
+        public int AssignedUserId { get; set; }
+        [ForeignKey("AssignedUserId")]
         public User AssignedUser { get; set; }
+
+        
+        [Display(Name = "Oluşturulma Tarihi")]
+        public DateTime CreatedDate { get; set; } = DateTime.Now; 
+
+        [Display(Name = "Son Güncelleme Tarihi")]
+        public DateTime? LastUpdatedDate { get; set; }
+
+        [Display(Name = "Tamamlanma Tarihi")]
+        public DateTime? CompletionDate { get; set; }
+
+        [Display(Name = "Görsel Yolu")]
+        public string? ImagePath { get; set; }
+
+
+        public List<Message> Messages { get; set; } = new List<Message>();
+       
     }
 }

@@ -1,38 +1,38 @@
 ﻿{
   "$schema": "http://json.schemastore.org/launchsettings.json",
-  "iisSettings": {
-    "windowsAuthentication": false,
-    "anonymousAuthentication": true,
-    "iisExpress": {
-      "applicationUrl": "http://localhost:47423",
-      "sslPort": 44385
-    }
-  },
-  "profiles": {
-    "http": {
-      "commandName": "Project",
-      "dotnetRunMessages": true,
-      "launchBrowser": true,
-      "applicationUrl": "http://localhost:5004",
-      "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
-      }
+    "iisSettings": { //projenizin IIS Express (Internet Information Services Express) üzerinde çalıştırıldığında geçerli olacak ayarları içerir.
+        "windowsAuthentication": false, //Windows hesabınızla otomatik olarak oturum açılmayacağı anlamına gelir.
+        "anonymousAuthentication": true, //kullanıcıların giriş yapmadan siteye erişebileceği anlamına gelir. 
+        "iisExpress": {
+            "applicationUrl": "http://localhost:47423",
+            "sslPort": 44385
+        }
     },
-    "https": {
-      "commandName": "Project",
-      "dotnetRunMessages": true,
-      "launchBrowser": true,
-      "applicationUrl": "https://localhost:7249;http://localhost:5004",
-      "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
-      }
-    },
-    "IIS Express": {
-      "commandName": "IISExpress",
-      "launchBrowser": true,
-      "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
-      }
+    "profiles": { //Bu bölüm, uygulamanızı çalıştırabileceğiniz farklı başlatma profillerini tanımlar
+        "http": {
+            "commandName": "Project",
+            "dotnetRunMessages": true,
+            "launchBrowser": true, //Uygulama başarıyla başlatıldığında varsayılan web tarayıcınızın otomatik olarak açılıp uygulama URL'sine gitmesini sağlar.
+            "applicationUrl": "http://localhost:5004",
+            "environmentVariables": {
+                "ASPNETCORE_ENVIRONMENT": "Development" //uygulamanın geliştirme ortamında çalıştığını belirtir.
+            }
+        },
+        "https": {
+            "commandName": "Project",
+            "dotnetRunMessages": true,
+            "launchBrowser": true,
+            "applicationUrl": "https://localhost:7249;http://localhost:5004",
+            "environmentVariables": {
+                "ASPNETCORE_ENVIRONMENT": "Development"
+            }
+        },
+        "IIS Express": {
+            "commandName": "IISExpress",
+            "launchBrowser": true,
+            "environmentVariables": {
+                "ASPNETCORE_ENVIRONMENT": "Development"
+            }
+        }
     }
-  }
 }

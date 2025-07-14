@@ -1,9 +1,9 @@
-﻿using Microsoft.AspNetCore.Authorization; // Bu using'i ekleyin
+﻿using Microsoft.AspNetCore.Authorization; 
 using Microsoft.AspNetCore.Mvc;
 
 namespace GorevTakipSistemi.Controllers
 {
-    [Authorize(Roles = "User")] // Sadece User rolüne sahip kullanıcılar erişebilir
+    [Authorize(Roles = "User")] 
     public class UserController : Controller
     {
         public IActionResult Index()

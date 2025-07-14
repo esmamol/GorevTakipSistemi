@@ -1,14 +1,13 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using GorevTakipSistemi.Models; // User ve UserRole enum'u için
+using GorevTakipSistemi.Models;
 using GorevTakipSistemi.ViewModels;
 using GorevTakipSistemi.Data;
-using BCrypt.Net; // BCrypt kullanımı için
-using System.Security.Claims;
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.Cookies;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.Authorization; // [Authorize] ve [AllowAnonymous] için
-using System.Linq; // Rol yönlendirmesi için User.IsInRole() kullanımı
+using System.Security.Claims; 
+using Microsoft.AspNetCore.Authentication; 
+using Microsoft.AspNetCore.Authentication.Cookies; 
+using Microsoft.EntityFrameworkCore; 
+using Microsoft.AspNetCore.Authorization;
+
 
 namespace GorevTakipSistemi.Controllers
 {
@@ -22,23 +21,35 @@ namespace GorevTakipSistemi.Controllers
         }
 
         [HttpGet]
-        [AllowAnonymous] // Giriş yapmadan erişilebilir
+        [AllowAnonymous] 
         public IActionResult Login()
         {
+            if (User.Identity.IsAuthenticated)
+            {
+                if (User.IsInRole(UserRole.Admin.ToString()))
+                {
+                    return RedirectToAction("Index", "Admin");
+                }
+                else if (User.IsInRole(UserRole.User.ToString()))
+                {
+                    return RedirectToAction("Index", "User");
+                }
+                
+                return RedirectToAction("AccessDenied", "Account");
+            }
             return View();
         }
 
         [HttpPost]
-        [AllowAnonymous] // Giriş yapmadan erişilebilir
+        [AllowAnonymous] 
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Login(LoginViewModel model)
         {
-            if (ModelState.IsValid)
+            if (ModelState.IsValid) 
             {
-                // Kullanıcıyı doğrudan veritabanından çek (UserRole navigasyon özelliğine ihtiyaç yok)
                 var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == model.Username);
 
-                // Şifre doğrulamasını BCrypt ile yap
+              
                 if (user != null && BCrypt.Net.BCrypt.Verify(model.Password, user.PasswordHash))
                 {
                     var claims = new List<Claim>
@@ -49,31 +60,30 @@ namespace GorevTakipSistemi.Controllers
                     };
 
                     var claimsIdentity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
-
+                   
                     var authProperties = new AuthenticationProperties
                     {
                         IsPersistent = model.RememberMe, // "Beni Hatırla" işaretliyse kalıcı çerez, değilse session çerezi
-                        // ExpireUtc sadece IsPersistent true ise anlamlıdır.
-                        // Eğer RememberMe false ise, tarayıcı kapanınca çerez silinir.
                         ExpiresUtc = model.RememberMe ? DateTimeOffset.UtcNow.AddDays(7) : (DateTimeOffset?)null
                     };
 
-                    await HttpContext.SignInAsync(
+                    await HttpContext.SignInAsync( 
                         CookieAuthenticationDefaults.AuthenticationScheme,
                         new ClaimsPrincipal(claimsIdentity),
                         authProperties);
+                    // ClaimsPrincipal nesnesini kullanarak kimlik doğrulama çerezini oluşturur ve kullanıcının tarayıcısına gönderir.
 
-                    // Rolüne göre yönlendirme (User.IsInRole kullanımı)
-                    if (User.IsInRole(UserRole.Admin.ToString())) // Enum değerini string'e çevirerek kontrol et
+                 
+                    if (user.Role == UserRole.Admin)
                     {
-                        return RedirectToAction("Index", "Admin");
+                        return RedirectToAction("Index", "Admin"); 
                     }
-                    else if (User.IsInRole(UserRole.User.ToString())) // Enum değerini string'e çevirerek kontrol et
+                    else if (user.Role == UserRole.User)
                     {
-                        return RedirectToAction("Index", "User");
+                        return RedirectToAction("Index", "User"); 
                     }
-                    // Eğer tanımsız bir rol varsa veya eşleşmezse Home'a yönlendirilebilir
-                    return RedirectToAction("Index", "Home");
+                  
+                    return RedirectToAction("AccessDenied", "Account");
                 }
                 ModelState.AddModelError(string.Empty, "Geçersiz kullanıcı adı veya şifre.");
             }
@@ -81,27 +91,27 @@ namespace GorevTakipSistemi.Controllers
         }
 
         [HttpGet]
-        [AllowAnonymous] // Giriş yapmadan erişilebilir
+        [AllowAnonymous]
         public IActionResult Register()
         {
             return View();
         }
 
         [HttpPost]
-        [AllowAnonymous] // Giriş yapmadan erişilebilir
+        [AllowAnonymous] 
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Register(RegisterViewModel model)
         {
             if (ModelState.IsValid)
             {
-                // Kullanıcı adı (Username) zaten kullanımda mı kontrolü
+               
                 if (await _context.Users.AnyAsync(u => u.Username == model.Username))
                 {
                     ModelState.AddModelError("Username", "Bu kullanıcı adı zaten kullanımda.");
                     return View(model);
                 }
 
-                // E-posta adresi (Email) boş değilse ve zaten kullanımda mı kontrolü
+                
                 if (!string.IsNullOrEmpty(model.Email) && await _context.Users.AnyAsync(u => u.Email == model.Email))
                 {
                     ModelState.AddModelError("Email", "Bu e-posta adresi zaten kullanımda.");
@@ -110,34 +120,36 @@ namespace GorevTakipSistemi.Controllers
 
                 var user = new User
                 {
-                    Username = model.Username,
+                    Username = model.Username, 
+                                               
                     Email = model.Email,
                     PhoneNumber = model.PhoneNumber,
                     PasswordHash = BCrypt.Net.BCrypt.HashPassword(model.Password),
-                    Role = UserRole.User // Enum değeri doğrudan atanır
+                    Role = UserRole.User // Varsayılan olarak 'User' rolü atandı.
                 };
 
                 _context.Add(user);
                 await _context.SaveChangesAsync();
 
                 TempData["SuccessMessage"] = "Kaydınız başarıyla tamamlandı. Şimdi giriş yapabilirsiniz.";
-                return RedirectToAction("Login"); // Kayıt sonrası Login sayfasına yönlendir
+                return RedirectToAction("Login");
             }
             return View(model);
         }
 
         [HttpGet]
-        [Authorize] // Çıkış yapmak için giriş yapmış olmak gerekir
+        [Authorize] 
         public async Task<IActionResult> Logout()
         {
+           
             await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-            return RedirectToAction("Login", "Account"); // Çıkış sonrası Login sayfasına yönlendir
+            return RedirectToAction("Login", "Account"); 
         }
 
-        [AllowAnonymous] // Yetkisiz erişim sayfasını görmek için giriş yapmış olmak gerekmez
+        [AllowAnonymous] 
         public IActionResult AccessDenied()
         {
-            return View();
+            return View(); // Views/Account/AccessDenied.cshtml yolundaki View'ı render ederek kullanıcıya yetkisiz erişim mesajını gösterir.
         }
     }
 }

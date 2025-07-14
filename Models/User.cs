@@ -1,7 +1,5 @@
-﻿// Models/User.cs
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using System.Collections.Generic;
-
 namespace GorevTakipSistemi.Models
 {
     public class User

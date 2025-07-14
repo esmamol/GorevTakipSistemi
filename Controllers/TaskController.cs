@@ -1,20 +1,17 @@
-﻿using System.Linq;
-using System.Security.Claims;
-using System.Threading.Tasks;
-using GorevTakipSistemi.Data;
-using GorevTakipSistemi.Models;
+﻿using GorevTakipSistemi.Data;
+using GorevTakipSistemi.Models; 
 using GorevTakipSistemi.ViewModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using System.Text;
-using System;
-using Microsoft.AspNetCore.Mvc.ModelBinding; // <-- Bu satırı eklediğinizden emin olun!
+using System.Security.Claims;
+using System.IO; // Path ve FileStream için eklendi 
 
 namespace GorevTakipSistemi.Controllers
 {
-    [Authorize]
+    [Authorize] 
     public class TaskController : Controller
     {
         private readonly ApplicationDbContext _context;
@@ -27,21 +24,19 @@ namespace GorevTakipSistemi.Controllers
         // GET: Task
         public async Task<IActionResult> Index()
         {
-            // Kullanıcının kimliğini ve rolünü doğru bir şekilde alalım
-            var userIdString = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (!int.TryParse(userIdString, out int currentUserId))
             {
-                // Kullanıcı ID'si alınamazsa, bu bir yetkilendirme sorunudur veya oturum açmamıştır.
                 TempData["ErrorMessage"] = "Kullanıcı bilgisi alınamadı. Lütfen tekrar giriş yapın.";
                 return RedirectToAction("Login", "Account");
             }
 
-            if (User.IsInRole(GorevTakipSistemi.Models.UserRole.Admin.ToString()))
+            if (User.IsInRole(UserRole.Admin.ToString()))
             {
                 var allTasks = await _context.Tasks.Include(t => t.AssignedUser).ToListAsync();
                 return View(allTasks);
             }
-            else // User rolündeki kullanıcılar
+            else 
             {
                 var userTasks = await _context.Tasks
                                                     .Where(t => t.AssignedUserId == currentUserId)
@@ -52,29 +47,26 @@ namespace GorevTakipSistemi.Controllers
         }
 
         // GET: Task/Create (Yeni Görev Ekleme Formu)
-        [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> Create() // async olarak değiştirildi
+        [Authorize(Roles = "Admin")] 
+        public async Task<IActionResult> Create()
         {
-            var users = await _context.Users.ToListAsync(); // async olarak çek
+            var users = await _context.Users.ToListAsync();
             ViewData["AssignedUserId"] = new SelectList(users, "Id", "Username");
             return View();
         }
 
         // POST: Task/Create (Yeni Görev Ekleme İşlemi)
         [HttpPost]
-        [Authorize(Roles = "Admin")]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create(CreateTaskViewModel viewModel)
+        [Authorize(Roles = "Admin")] 
+        [ValidateAntiForgeryToken] // CSRF saldırılarına karşı koruma
+        public async Task<IActionResult> Create(CreateTaskViewModel viewModel, IFormFile imageFile)
         {
-            // ModelState.Remove, AssignedUser/AssignedUserId için oluşabilecek gereksiz validasyon hatalarını bypass eder.
-            // Özellikle CreateTaskViewModel'de [Required] olmamasına rağmen EF Core'dan gelen bir sıkıntı olabilir.
-            ModelState.Remove("AssignedUser"); // Eğer modelinizde AssignedUser navigasyon özelliği varsa
-            // ModelState.Remove("AssignedUserId"); // Eğer AssignedUserId için özel bir validasyon hatası gelirse açılabilir
+            ModelState.Remove("AssignedUser");
+            ModelState.Remove("Messages"); 
 
             if (ModelState.IsValid)
             {
-                // Seçilen AssignedUserId'nin geçerli olup olmadığını manuel kontrol edelim
-                if (viewModel.AssignedUserId == 0) // Eğer dropdown'dan "-- Kullanıcı Seçin --" seçildiyse (value="0")
+                if (viewModel.AssignedUserId == 0)
                 {
                     ModelState.AddModelError("AssignedUserId", "Atanacak kullanıcı seçimi zorunludur.");
                 }
@@ -87,15 +79,30 @@ namespace GorevTakipSistemi.Controllers
                     }
                 }
 
-                if (ModelState.IsValid) // Tekrar kontrol et, manuel hata eklendiyse
+                if (ModelState.IsValid)
                 {
                     var task = new GorevTakipSistemi.Models.Task
                     {
                         Title = viewModel.Title,
                         Description = viewModel.Description,
                         AssignedUserId = viewModel.AssignedUserId,
-                        Status = "Beklemede"
+                        Status = "Beklemede", 
+                        CreatedDate = DateTime.Now,
+                        LastUpdatedDate = DateTime.Now 
                     };
+
+                    
+                    if (imageFile != null && imageFile.Length > 0)
+                    {
+                        var fileName = Path.GetFileNameWithoutExtension(imageFile.FileName);
+                        var extension = Path.GetExtension(imageFile.FileName);
+                        task.ImagePath = fileName = fileName + DateTime.Now.ToString("yymmssfff") + extension;
+                        var path = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot/images", fileName);
+                        using (var stream = new FileStream(path, FileMode.Create))
+                        {
+                            await imageFile.CopyToAsync(stream);
+                        }
+                    }
 
                     _context.Add(task);
                     await _context.SaveChangesAsync();
@@ -104,7 +111,6 @@ namespace GorevTakipSistemi.Controllers
                 }
             }
 
-            // ModelState.IsValid false ise (ilk validasyonda veya manuel eklenen hata ile)
             StringBuilder errorMessages = new StringBuilder();
             errorMessages.AppendLine("Görev eklenemedi. Lütfen hataları düzeltin:");
             foreach (var modelStateEntry in ModelState.Values)
@@ -128,7 +134,7 @@ namespace GorevTakipSistemi.Controllers
             return View(viewModel);
         }
 
-        // GET: Task/Details/5
+        // GET: Task/Details/5 (Görev Detayları)
         public async Task<IActionResult> Details(int? id)
         {
             if (id == null)
@@ -145,11 +151,12 @@ namespace GorevTakipSistemi.Controllers
                 return NotFound();
             }
 
-            if (User.IsInRole(GorevTakipSistemi.Models.UserRole.User.ToString()))
+            if (User.IsInRole(UserRole.User.ToString()))
             {
-                var userIdString = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
                 if (!int.TryParse(userIdString, out int currentUserId) || task.AssignedUserId != currentUserId)
                 {
+                    TempData["ErrorMessage"] = "Bu görevin detaylarını görüntülemeye yetkiniz yok.";
                     return Forbid();
                 }
             }
@@ -157,7 +164,7 @@ namespace GorevTakipSistemi.Controllers
             return View(task);
         }
 
-        // GET: Task/Edit/5
+        // GET: Task/Edit/5 (Görev Düzenleme Formu)
         [HttpGet]
         public async Task<IActionResult> Edit(int? id)
         {
@@ -172,11 +179,12 @@ namespace GorevTakipSistemi.Controllers
                 return NotFound();
             }
 
-            if (User.IsInRole(GorevTakipSistemi.Models.UserRole.User.ToString()))
+            if (User.IsInRole(UserRole.User.ToString()))
             {
-                var userIdString = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
                 if (!int.TryParse(userIdString, out int currentUserId) || task.AssignedUserId != currentUserId)
                 {
+                    TempData["ErrorMessage"] = "Bu görevi düzenlemeye yetkiniz yok.";
                     return Forbid();
                 }
             }
@@ -189,198 +197,203 @@ namespace GorevTakipSistemi.Controllers
         // POST: Task/Edit/5 (Görev Düzenleme İşlemi)
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, GorevTakipSistemi.Models.Task task)
+        public async Task<IActionResult> Edit(int id, [Bind("Id,Title,Description,Status,AssignedUserId,CreatedDate,LastUpdatedDate,CompletionDate,ImagePath")] GorevTakipSistemi.Models.Task task, IFormFile imageFile) // IFormFile eklendi
         {
             if (id != task.Id)
             {
+                TempData["ErrorMessage"] = "Geçersiz görev kimliği.";
                 return NotFound();
             }
 
-            // existingTask'i veritabanından çekelim, AsNoTracking ile takip edilmesini engelleyelim
-            // Böylece manuel olarak Attach edip değişiklikleri kontrol edebiliriz.
-            var existingTask = await _context.Tasks.Include(t => t.AssignedUser).AsNoTracking().FirstOrDefaultAsync(t => t.Id == id);
+            var existingTask = await _context.Tasks.AsNoTracking().FirstOrDefaultAsync(t => t.Id == id);
             if (existingTask == null)
             {
+                TempData["ErrorMessage"] = "Güncellenmek istenen görev bulunamadı.";
                 return NotFound();
             }
 
-            // Yetki kontrolü
-            if (User.IsInRole(GorevTakipSistemi.Models.UserRole.User.ToString()))
+            // Yetki kontrolü için kullanıcı rolü ve atanan kullanıcı bilgileri
+            bool isAdmin = User.IsInRole(UserRole.Admin.ToString());
+            var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!int.TryParse(userIdString, out int currentUserId))
             {
-                var userIdString = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-                if (!int.TryParse(userIdString, out int currentUserId) || existingTask.AssignedUserId != currentUserId)
+                TempData["ErrorMessage"] = "Kullanıcı bilgisi alınamadı. Lütfen tekrar giriş yapın.";
+                return RedirectToAction("Login", "Account");
+            }
+            bool isAssignedUser = (existingTask.AssignedUserId == currentUserId);
+
+           
+            if (!isAdmin && !isAssignedUser)
+            {
+                TempData["ErrorMessage"] = "Bu görevi düzenlemeye yetkiniz yok.";
+                return Forbid();
+            }
+            
+            
+            ModelState.Clear();
+
+            var taskToUpdate = new GorevTakipSistemi.Models.Task();
+            _context.Entry(taskToUpdate).CurrentValues.SetValues(existingTask); 
+
+           
+            if (isAssignedUser && !isAdmin)
+            {
+              
+                task.ImagePath = existingTask.ImagePath; 
+        
+            }
+            
+            else if (isAdmin)
+            {
+               
+                task.Status = existingTask.Status;
+                task.CreatedDate = existingTask.CreatedDate; 
+            }
+
+          
+            if (string.IsNullOrEmpty(task.Title) && isAdmin)
+            {
+                ModelState.AddModelError("Title", "Başlık alanı boş olamaz.");
+            }
+            if (string.IsNullOrEmpty(task.Description) && isAdmin)
+            {
+                ModelState.AddModelError("Description", "Açıklama alanı boş olamaz.");
+            }
+            if (task.AssignedUserId == 0 && isAdmin)
+            {
+                 ModelState.AddModelError("AssignedUserId", "Atanacak kullanıcı seçimi zorunludur.");
+            }
+            else if (isAdmin) 
+            {
+                var selectedUserExists = await _context.Users.AnyAsync(u => u.Id == task.AssignedUserId);
+                if (!selectedUserExists)
                 {
-                    return Forbid();
+                    ModelState.AddModelError("AssignedUserId", "Seçilen kullanıcı bulunamadı.");
                 }
+            }
 
-                // User rolündeyse, sadece Status'u güncelleyebilir.
-                // Model state'i Status dışındaki alanlar için temizleyelim, gereksiz hataları engeller.
-                ModelState.Remove("Title");
-                ModelState.Remove("Description");
-                ModelState.Remove("AssignedUserId");
-                ModelState.Remove("AssignedUser");
 
-                // Sadece Status alanının validasyonunu kontrol et
-                if (!ModelState.ContainsKey("Status") || ModelState["Status"].Errors.Count == 0)
+            if (ModelState.IsValid)
+            {
+                try
                 {
-                    // ExistingTask'i takip etmeye başla
-                    _context.Attach(existingTask);
-                    // Sadece Status özelliğini değiştirildi olarak işaretle
-                    _context.Entry(existingTask).Property(t => t.Status).IsModified = true;
+                    
+                    _context.Entry(existingTask).CurrentValues.SetValues(task); 
 
-                    // Diğer alanların orijinal değerlerini korumak için IsModified = false yap
-                    _context.Entry(existingTask).Property(t => t.Title).IsModified = false;
-                    _context.Entry(existingTask).Property(t => t.Description).IsModified = false;
-                    _context.Entry(existingTask).Property(t => t.AssignedUserId).IsModified = false;
+                   
+                    existingTask.LastUpdatedDate = DateTime.Now;
 
-                    // Formdan gelen Status değerini ata
-                    existingTask.Status = task.Status;
-
-                    try
+             
+                    if (isAssignedUser && !isAdmin) 
                     {
-                        await _context.SaveChangesAsync();
-                        TempData["SuccessMessage"] = "Görev başarıyla güncellendi.";
-                        return RedirectToAction(nameof(Index));
+                        
+                        _context.Entry(existingTask).Property(t => t.Status).IsModified = true;
+                        _context.Entry(existingTask).Property(t => t.CompletionDate).IsModified = true;
+                     
+                        _context.Entry(existingTask).Property(t => t.Title).IsModified = false;
+                        _context.Entry(existingTask).Property(t => t.Description).IsModified = false;
+                        _context.Entry(existingTask).Property(t => t.AssignedUserId).IsModified = false;
+                        _context.Entry(existingTask).Property(t => t.CreatedDate).IsModified = false; 
+                        _context.Entry(existingTask).Property(t => t.ImagePath).IsModified = false;
                     }
-                    catch (DbUpdateConcurrencyException)
+                    else if (isAdmin) 
                     {
-                        if (!TaskExists(existingTask.Id))
+                       
+                        _context.Entry(existingTask).Property(t => t.Title).IsModified = true;
+                        _context.Entry(existingTask).Property(t => t.Description).IsModified = true;
+                        _context.Entry(existingTask).Property(t => t.AssignedUserId).IsModified = true;
+                        _context.Entry(existingTask).Property(t => t.Status).IsModified = false; 
+                        _context.Entry(existingTask).Property(t => t.CompletionDate).IsModified = true;
+                        _context.Entry(existingTask).Property(t => t.CreatedDate).IsModified = false; 
+                        
+                      
+                        if (imageFile != null && imageFile.Length > 0)
                         {
-                            return NotFound();
+                          
+                            if (!string.IsNullOrEmpty(existingTask.ImagePath))
+                            {
+                                var oldImagePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot/images", existingTask.ImagePath);
+                                if (System.IO.File.Exists(oldImagePath))
+                                {
+                                    System.IO.File.Delete(oldImagePath);
+                                }
+                            }
+
+                            var fileName = Path.GetFileNameWithoutExtension(imageFile.FileName);
+                            var extension = Path.GetExtension(imageFile.FileName);
+                            existingTask.ImagePath = fileName = fileName + DateTime.Now.ToString("yymmssfff") + extension;
+                            var path = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot/images", fileName);
+                            using (var stream = new FileStream(path, FileMode.Create))
+                            {
+                                await imageFile.CopyToAsync(stream);
+                            }
+                            _context.Entry(existingTask).Property(t => t.ImagePath).IsModified = true;
                         }
                         else
                         {
-                            TempData["ErrorMessage"] = "Görev güncellenirken bir çakışma oluştu. Lütfen tekrar deneyin.";
-                            var users = await _context.Users.ToListAsync();
-                            ViewData["AssignedUserId"] = new SelectList(users, "Id", "Username", existingTask.AssignedUserId);
-                            return View(existingTask);
+                           
+                             _context.Entry(existingTask).Property(t => t.ImagePath).IsModified = false;
                         }
                     }
-                    catch (Exception ex)
+
+                    await _context.SaveChangesAsync();
+                    TempData["SuccessMessage"] = "Görev başarıyla güncellendi.";
+                    return RedirectToAction(nameof(Index));
+                }
+                catch (DbUpdateConcurrencyException)
+                {
+                    if (!TaskExists(existingTask.Id))
                     {
-                        TempData["ErrorMessage"] = $"Bir hata oluştu: {ex.Message}";
+                        TempData["ErrorMessage"] = "Görev veritabanında bulunamadı. Başka bir kullanıcı tarafından silinmiş olabilir.";
+                        return NotFound();
+                    }
+                    else
+                    {
+                        TempData["ErrorMessage"] = "Görev güncellenirken bir çakışma oluştu. Lütfen tekrar deneyin.";
                         var users = await _context.Users.ToListAsync();
                         ViewData["AssignedUserId"] = new SelectList(users, "Id", "Username", existingTask.AssignedUserId);
                         return View(existingTask);
                     }
                 }
-                else // Status validasyonu başarısız olursa
+                catch (Exception ex)
                 {
-                    StringBuilder errorMessages = new StringBuilder();
-                    errorMessages.AppendLine("Güncelleme başarısız oldu. Lütfen hataları düzeltin:");
-                    foreach (var modelStateEntry in ModelState.Values)
-                    {
-                        foreach (var error in modelStateEntry.Errors)
-                        {
-                            if (!string.IsNullOrEmpty(error.ErrorMessage))
-                            {
-                                errorMessages.AppendLine($"- {error.ErrorMessage}");
-                            }
-                            else if (error.Exception != null)
-                            {
-                                errorMessages.AppendLine($"- Bir hata oluştu: {error.Exception.Message}");
-                            }
-                        }
-                    }
-                    TempData["ErrorMessage"] = errorMessages.ToString();
+                    TempData["ErrorMessage"] = $"Görev güncellenirken bir hata oluştu: {ex.Message}";
                     var users = await _context.Users.ToListAsync();
                     ViewData["AssignedUserId"] = new SelectList(users, "Id", "Username", existingTask.AssignedUserId);
                     return View(existingTask);
                 }
             }
-            else if (User.IsInRole(GorevTakipSistemi.Models.UserRole.Admin.ToString()))
+
+           
+            StringBuilder errorMessages = new StringBuilder();
+            errorMessages.AppendLine("Görev güncellenemedi. Lütfen hataları düzeltin:");
+            foreach (var modelStateEntry in ModelState.Values)
             {
-                // Admin rolündeyse, tüm alanları güncelleyebilir.
-                // ModelState'i AssignedUser navigasyon özelliği hatasından temizleyelim.
-                ModelState.Remove("AssignedUser");
-
-                // Formdan gelen 'task' nesnesinin ID'sini mevcut görev ID'siyle eşleştir
-                task.Id = existingTask.Id; // Güvenlik için ID'nin doğru olduğundan emin olalım
-
-                // DbContext'e 'task' nesnesini Attach et
-                // Bu nesne formdan geldiği için yeni bir nesne olarak algılanabilir.
-                _context.Attach(task);
-
-                // Entity'nin durumunu Modified olarak ayarla. Bu, EF'nin tüm alanlarda değişiklik aramasını sağlar.
-                // Bu satır, task objesinin tüm propertylerinin güncellendiğini EF'e bildirir.
-                _context.Entry(task).State = EntityState.Modified;
-
-                // AssignedUserId için manuel doğrulama yapalım
-                if (task.AssignedUserId == 0) // Formdan gelen task.AssignedUserId kontrol ediyoruz
+                foreach (var error in modelStateEntry.Errors)
                 {
-                    ModelState.AddModelError("AssignedUserId", "Atanacak kullanıcı seçimi zorunludur.");
-                }
-                else
-                {
-                    var selectedUserExists = await _context.Users.AnyAsync(u => u.Id == task.AssignedUserId);
-                    if (!selectedUserExists)
+                    if (!string.IsNullOrEmpty(error.ErrorMessage))
                     {
-                        ModelState.AddModelError("AssignedUserId", "Seçilen kullanıcı bulunamadı.");
+                        errorMessages.AppendLine($"- {error.ErrorMessage}");
                     }
-                }
-
-                if (ModelState.IsValid)
-                {
-                    try
+                    else if (error.Exception != null)
                     {
-                        await _context.SaveChangesAsync();
-                        TempData["SuccessMessage"] = "Görev başarıyla güncellendi.";
-                        return RedirectToAction(nameof(Index));
+                        errorMessages.AppendLine($"- {error.Exception.Message}");
                     }
-                    catch (DbUpdateConcurrencyException)
-                    {
-                        if (!TaskExists(existingTask.Id))
-                        {
-                            return NotFound();
-                        }
-                        else
-                        {
-                            TempData["ErrorMessage"] = "Görev güncellenirken bir çakışma oluştu. Lütfen tekrar deneyin.";
-                            var users = await _context.Users.ToListAsync();
-                            ViewData["AssignedUserId"] = new SelectList(users, "Id", "Username", existingTask.AssignedUserId);
-                            return View(existingTask);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        TempData["ErrorMessage"] = $"Bir hata oluştu: {ex.Message}";
-                        var users = await _context.Users.ToListAsync();
-                        ViewData["AssignedUserId"] = new SelectList(users, "Id", "Username", existingTask.AssignedUserId);
-                        return View(existingTask);
-                    }
-                }
-                else // Admin rolünde ModelState.IsValid false ise
-                {
-                    StringBuilder errorMessages = new StringBuilder();
-                    errorMessages.AppendLine("Güncelleme başarısız oldu. Lütfen hataları düzeltin:");
-                    foreach (var modelStateEntry in ModelState.Values)
-                    {
-                        foreach (var error in modelStateEntry.Errors)
-                        {
-                            if (!string.IsNullOrEmpty(error.ErrorMessage))
-                            {
-                                errorMessages.AppendLine($"- {error.ErrorMessage}");
-                            }
-                            else if (error.Exception != null)
-                            {
-                                errorMessages.AppendLine($"- Bir hata oluştu: {error.Exception.Message}");
-                            }
-                        }
-                    }
-                    TempData["ErrorMessage"] = errorMessages.ToString();
-                    var users = await _context.Users.ToListAsync();
-                    ViewData["AssignedUserId"] = new SelectList(users, "Id", "Username", existingTask.AssignedUserId);
-                    return View(existingTask); // Hata durumunda existingTask'i gönderiyoruz, çünkü bu, veritabanındaki son durumdu.
                 }
             }
-
-            var allUsers = await _context.Users.ToListAsync();
-            ViewData["AssignedUserId"] = new SelectList(allUsers, "Id", "Username", existingTask.AssignedUserId);
-            return View(existingTask);
+            TempData["ErrorMessage"] = errorMessages.ToString();
+            var usersList = await _context.Users.ToListAsync();
+            ViewData["AssignedUserId"] = new SelectList(usersList, "Id", "Username", task.AssignedUserId);
+           
+            task.Status = existingTask.Status;
+            task.AssignedUserId = existingTask.AssignedUserId;
+            task.ImagePath = existingTask.ImagePath; 
+            return View(task); 
         }
 
-        // GET: Task/Delete/5
-        [Authorize(Roles = "Admin")]
+
+        // GET: Task/Delete/5 (Görev Silme Onay Sayfası)
+        [Authorize(Roles = "Admin")] 
         public async Task<IActionResult> Delete(int? id)
         {
             if (id == null)
@@ -399,22 +412,37 @@ namespace GorevTakipSistemi.Controllers
             return View(task);
         }
 
-        // POST: Task/Delete/5
-        [HttpPost, ActionName("Delete")]
-        [ValidateAntiForgeryToken]
-        [Authorize(Roles = "Admin")]
+        // POST: Task/Delete/5 (Görev Silme İşlemi)
+        [HttpPost, ActionName("Delete")] 
+        [ValidateAntiForgeryToken] 
+        [Authorize(Roles = "Admin")] 
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
             var task = await _context.Tasks.FindAsync(id);
             if (task != null)
             {
+               
+                var messages = await _context.Messages.Where(m => m.TaskId == id).ToListAsync();
+                _context.Messages.RemoveRange(messages);
+
+                if (!string.IsNullOrEmpty(task.ImagePath))
+                {
+                    var imagePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot/images", task.ImagePath);
+                    if (System.IO.File.Exists(imagePath))
+                    {
+                        System.IO.File.Delete(imagePath);
+                    }
+                }
+
                 _context.Tasks.Remove(task);
-                await _context.SaveChangesAsync();
-                TempData["SuccessMessage"] = "Görev başarıyla silindi.";
             }
+
+            await _context.SaveChangesAsync();
+            TempData["SuccessMessage"] = "Görev başarıyla silindi.";
             return RedirectToAction(nameof(Index));
         }
 
+        // Görevin veritabanında olup olmadığını kontrol eder
         private bool TaskExists(int id)
         {
             return _context.Tasks.Any(e => e.Id == id);
