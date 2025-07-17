@@ -1,137 +1,45 @@
 ﻿using GorevTakipSistemi.Data;
-using GorevTakipSistemi.Models; 
+using GorevTakipSistemi.Models;
 using GorevTakipSistemi.ViewModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using System.Text;
-using System.Security.Claims;
-using System.IO; // Path ve FileStream için eklendi 
+using System.Linq;
+using System.IO;
+using System.Security.Claims; 
 
 namespace GorevTakipSistemi.Controllers
 {
-    [Authorize] 
     public class TaskController : Controller
     {
         private readonly ApplicationDbContext _context;
+        private readonly IWebHostEnvironment _hostEnvironment;
 
-        public TaskController(ApplicationDbContext context)
+        public TaskController(ApplicationDbContext context, IWebHostEnvironment hostEnvironment)
         {
             _context = context;
+            _hostEnvironment = hostEnvironment;
         }
 
-        // GET: Task
+        // GET: Task (Görev Listeleme)
         public async Task<IActionResult> Index()
         {
-            var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (!int.TryParse(userIdString, out int currentUserId))
-            {
-                TempData["ErrorMessage"] = "Kullanıcı bilgisi alınamadı. Lütfen tekrar giriş yapın.";
-                return RedirectToAction("Login", "Account");
-            }
+            var isAdmin = User.IsInRole(GorevTakipSistemi.Models.UserRole.Admin.ToString());
+            IQueryable<GorevTakipSistemi.Models.Task> applicationDbContext = _context.Tasks.Include(t => t.AssignedUser);
 
-            if (User.IsInRole(UserRole.Admin.ToString()))
+            if (!isAdmin)
             {
-                var allTasks = await _context.Tasks.Include(t => t.AssignedUser).ToListAsync();
-                return View(allTasks);
-            }
-            else 
-            {
-                var userTasks = await _context.Tasks
-                                                    .Where(t => t.AssignedUserId == currentUserId)
-                                                    .Include(t => t.AssignedUser)
-                                                    .ToListAsync();
-                return View(userTasks);
-            }
-        }
-
-        // GET: Task/Create (Yeni Görev Ekleme Formu)
-        [Authorize(Roles = "Admin")] 
-        public async Task<IActionResult> Create()
-        {
-            var users = await _context.Users.ToListAsync();
-            ViewData["AssignedUserId"] = new SelectList(users, "Id", "Username");
-            return View();
-        }
-
-        // POST: Task/Create (Yeni Görev Ekleme İşlemi)
-        [HttpPost]
-        [Authorize(Roles = "Admin")] 
-        [ValidateAntiForgeryToken] // CSRF saldırılarına karşı koruma
-        public async Task<IActionResult> Create(CreateTaskViewModel viewModel, IFormFile imageFile)
-        {
-            ModelState.Remove("AssignedUser");
-            ModelState.Remove("Messages"); 
-
-            if (ModelState.IsValid)
-            {
-                if (viewModel.AssignedUserId == 0)
+                var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (userIdString == null || !int.TryParse(userIdString, out int currentUserId))
                 {
-                    ModelState.AddModelError("AssignedUserId", "Atanacak kullanıcı seçimi zorunludur.");
+                    TempData["ErrorMessage"] = "Kullanıcı bilgisi alınamadı. Lütfen tekrar giriş yapın.";
+                    return RedirectToAction("Login", "Account"); // Ya da boş liste döndür
                 }
-                else
-                {
-                    var userExists = await _context.Users.AnyAsync(u => u.Id == viewModel.AssignedUserId);
-                    if (!userExists)
-                    {
-                        ModelState.AddModelError("AssignedUserId", "Seçilen kullanıcı bulunamadı.");
-                    }
-                }
-
-                if (ModelState.IsValid)
-                {
-                    var task = new GorevTakipSistemi.Models.Task
-                    {
-                        Title = viewModel.Title,
-                        Description = viewModel.Description,
-                        AssignedUserId = viewModel.AssignedUserId,
-                        Status = "Beklemede", 
-                        CreatedDate = DateTime.Now,
-                        LastUpdatedDate = DateTime.Now 
-                    };
-
-                    
-                    if (imageFile != null && imageFile.Length > 0)
-                    {
-                        var fileName = Path.GetFileNameWithoutExtension(imageFile.FileName);
-                        var extension = Path.GetExtension(imageFile.FileName);
-                        task.ImagePath = fileName = fileName + DateTime.Now.ToString("yymmssfff") + extension;
-                        var path = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot/images", fileName);
-                        using (var stream = new FileStream(path, FileMode.Create))
-                        {
-                            await imageFile.CopyToAsync(stream);
-                        }
-                    }
-
-                    _context.Add(task);
-                    await _context.SaveChangesAsync();
-                    TempData["SuccessMessage"] = "Görev başarıyla eklendi.";
-                    return RedirectToAction(nameof(Index));
-                }
+                applicationDbContext = applicationDbContext.Where(t => t.AssignedUserId == currentUserId);
             }
-
-            StringBuilder errorMessages = new StringBuilder();
-            errorMessages.AppendLine("Görev eklenemedi. Lütfen hataları düzeltin:");
-            foreach (var modelStateEntry in ModelState.Values)
-            {
-                foreach (var error in modelStateEntry.Errors)
-                {
-                    if (!string.IsNullOrEmpty(error.ErrorMessage))
-                    {
-                        errorMessages.AppendLine($"- {error.ErrorMessage}");
-                    }
-                    else if (error.Exception != null)
-                    {
-                        errorMessages.AppendLine($"- Bir hata oluştu: {error.Exception.Message}");
-                    }
-                }
-            }
-            TempData["ErrorMessage"] = errorMessages.ToString();
-
-            var users = await _context.Users.ToListAsync();
-            ViewData["AssignedUserId"] = new SelectList(users, "Id", "Username", viewModel.AssignedUserId);
-            return View(viewModel);
+            return View(await applicationDbContext.ToListAsync());
         }
 
         // GET: Task/Details/5 (Görev Detayları)
@@ -143,29 +51,126 @@ namespace GorevTakipSistemi.Controllers
             }
 
             var task = await _context.Tasks
-                .Include(t => t.AssignedUser)
-                .FirstOrDefaultAsync(m => m.Id == id);
+                                     .Include(t => t.AssignedUser)
+                                     .FirstOrDefaultAsync(m => m.Id == id);
 
             if (task == null)
             {
                 return NotFound();
             }
 
-            if (User.IsInRole(UserRole.User.ToString()))
-            {
-                var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                if (!int.TryParse(userIdString, out int currentUserId) || task.AssignedUserId != currentUserId)
-                {
-                    TempData["ErrorMessage"] = "Bu görevin detaylarını görüntülemeye yetkiniz yok.";
-                    return Forbid();
-                }
-            }
-
             return View(task);
         }
 
-        // GET: Task/Edit/5 (Görev Düzenleme Formu)
-        [HttpGet]
+        // GET: Task/Create (Yeni Görev Oluşturma Formu)
+        public IActionResult Create()
+        {
+            
+            if (!User.IsInRole(UserRole.Admin.ToString()))
+            {
+                TempData["ErrorMessage"] = "Görev oluşturma yetkiniz yok.";
+                return Forbid();
+            }
+
+            ViewData["AssignedUserId"] = new SelectList(_context.Users, "Id", "Username");
+            return View();
+        }
+
+
+        // POST: Task/Create (Yeni Görev Ekleme İşlemi)
+        [HttpPost]
+        [Authorize(Roles = "Admin")]
+        [ValidateAntiForgeryToken] // CSRF saldırılarına karşı koruma
+        public async Task<IActionResult> Create(CreateTaskViewModel viewModel, IFormFile? imageFile) 
+        {
+            
+            ModelState.Remove("AssignedUser");
+            ModelState.Remove("Messages");
+
+
+            if (viewModel.AssignedUserId == 0)
+            {
+                ModelState.AddModelError("AssignedUserId", "Atanacak kullanıcı seçimi zorunludur.");
+            }
+            else
+            {
+                var userExists = await _context.Users.AnyAsync(u => u.Id == viewModel.AssignedUserId);
+                if (!userExists)
+                {
+                    ModelState.AddModelError("AssignedUserId", "Seçilen kullanıcı bulunamadı.");
+                }
+            }
+
+           
+            if (!ModelState.IsValid)
+            {
+                StringBuilder errorMessages = new StringBuilder();
+                errorMessages.AppendLine("Görev eklenemedi. Lütfen hataları düzeltin:");
+                foreach (var modelStateEntry in ModelState.Values)
+                {
+                    foreach (var error in modelStateEntry.Errors)
+                    {
+                        if (!string.IsNullOrEmpty(error.ErrorMessage))
+                        {
+                            errorMessages.AppendLine($"- {error.ErrorMessage}");
+                        }
+                        else if (error.Exception != null)
+                        {
+                            errorMessages.AppendLine($"- Bir hata oluştu: {error.Exception.Message}");
+                        }
+                    }
+                }
+                TempData["ErrorMessage"] = errorMessages.ToString();
+
+                var users = await _context.Users.ToListAsync();
+                ViewData["AssignedUserId"] = new SelectList(users, "Id", "Username", viewModel.AssignedUserId);
+                return View(viewModel); 
+            }
+
+            
+            var task = new GorevTakipSistemi.Models.Task
+            {
+                Title = viewModel.Title,
+                Description = viewModel.Description,
+                AssignedUserId = viewModel.AssignedUserId,
+                Status = GorevTakipSistemi.Models.TaskStatus.Beklemede.ToString(), 
+                CreatedDate = DateTime.Now,
+                StartDate = null
+            };
+
+            // Görsel yükleme
+            if (imageFile != null && imageFile.Length > 0)
+            {
+                
+                string uploadsFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot/images");
+              
+                if (!Directory.Exists(uploadsFolder))
+                {
+                    Directory.CreateDirectory(uploadsFolder);
+                }
+
+                string fileExtension = Path.GetExtension(imageFile.FileName).ToLowerInvariant();
+                string uniqueFileName = Guid.NewGuid().ToString() + "_" + imageFile.FileName;
+                string filePath = Path.Combine(uploadsFolder, uniqueFileName);
+
+                // Dosyayı kaydet
+                using (var fileStream = new FileStream(filePath, FileMode.Create))
+                {
+                    await imageFile.CopyToAsync(fileStream);
+                }
+                
+                task.ImagePath = "images/" + uniqueFileName;
+            }
+
+            _context.Add(task);
+            await _context.SaveChangesAsync();
+            TempData["SuccessMessage"] = "Görev başarıyla eklendi.";
+            return RedirectToAction(nameof(Index));
+        }
+
+
+
+        // GET: Task/Edit/5
         public async Task<IActionResult> Edit(int? id)
         {
             if (id == null)
@@ -173,31 +178,36 @@ namespace GorevTakipSistemi.Controllers
                 return NotFound();
             }
 
-            var task = await _context.Tasks.Include(t => t.AssignedUser).FirstOrDefaultAsync(t => t.Id == id);
+            var task = await _context.Tasks.FindAsync(id);
             if (task == null)
             {
                 return NotFound();
             }
 
-            if (User.IsInRole(UserRole.User.ToString()))
+            bool isAdmin = User.IsInRole(UserRole.Admin.ToString());
+            var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!int.TryParse(userIdString, out int currentUserId))
             {
-                var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                if (!int.TryParse(userIdString, out int currentUserId) || task.AssignedUserId != currentUserId)
-                {
-                    TempData["ErrorMessage"] = "Bu görevi düzenlemeye yetkiniz yok.";
-                    return Forbid();
-                }
+                TempData["ErrorMessage"] = "Kullanıcı bilgisi alınamadı. Lütfen tekrar giriş yapın.";
+                return RedirectToAction("Login", "Account");
+            }
+            bool isAssignedUser = (task.AssignedUserId == currentUserId);
+
+            if (!isAdmin && !isAssignedUser)
+            {
+                TempData["ErrorMessage"] = "Bu görevi düzenlemeye yetkiniz yok.";
+                return Forbid();
             }
 
-            var users = await _context.Users.ToListAsync();
-            ViewData["AssignedUserId"] = new SelectList(users, "Id", "Username", task.AssignedUserId);
+            ViewData["AssignedUserId"] = new SelectList(_context.Users, "Id", "Username", task.AssignedUserId);
             return View(task);
         }
+
 
         // POST: Task/Edit/5 (Görev Düzenleme İşlemi)
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("Id,Title,Description,Status,AssignedUserId,CreatedDate,LastUpdatedDate,CompletionDate,ImagePath")] GorevTakipSistemi.Models.Task task, IFormFile imageFile) // IFormFile eklendi
+        public async Task<IActionResult> Edit(int id, [Bind("Id,Title,Description,Status,AssignedUserId,CreatedDate,StartDate,CompletionDate")] GorevTakipSistemi.Models.Task task, IFormFile? imageFile, bool removeImage)
         {
             if (id != task.Id)
             {
@@ -205,6 +215,7 @@ namespace GorevTakipSistemi.Controllers
                 return NotFound();
             }
 
+           
             var existingTask = await _context.Tasks.AsNoTracking().FirstOrDefaultAsync(t => t.Id == id);
             if (existingTask == null)
             {
@@ -212,7 +223,12 @@ namespace GorevTakipSistemi.Controllers
                 return NotFound();
             }
 
-            // Yetki kontrolü için kullanıcı rolü ve atanan kullanıcı bilgileri
+            task.CreatedDate = existingTask.CreatedDate;
+            task.StartDate = existingTask.StartDate;
+            task.CompletionDate = existingTask.CompletionDate;
+            task.ImagePath = existingTask.ImagePath;
+
+
             bool isAdmin = User.IsInRole(UserRole.Admin.ToString());
             var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (!int.TryParse(userIdString, out int currentUserId))
@@ -222,178 +238,153 @@ namespace GorevTakipSistemi.Controllers
             }
             bool isAssignedUser = (existingTask.AssignedUserId == currentUserId);
 
-           
+            // Yetkilendirme kontrolü
             if (!isAdmin && !isAssignedUser)
             {
                 TempData["ErrorMessage"] = "Bu görevi düzenlemeye yetkiniz yok.";
                 return Forbid();
             }
-            
-            
-            ModelState.Clear();
 
-            var taskToUpdate = new GorevTakipSistemi.Models.Task();
-            _context.Entry(taskToUpdate).CurrentValues.SetValues(existingTask); 
+            string oldStatus = existingTask.Status;
+            var updatedTaskData = task; 
 
-           
-            if (isAssignedUser && !isAdmin)
+
+            
+            if (isAdmin)
             {
-              
-                task.ImagePath = existingTask.ImagePath; 
-        
+                
+                existingTask.Title = updatedTaskData.Title;
+                existingTask.Description = updatedTaskData.Description;
+                existingTask.AssignedUserId = updatedTaskData.AssignedUserId;
+               
             }
-            
-            else if (isAdmin)
+            else if (isAssignedUser) 
             {
                
-                task.Status = existingTask.Status;
-                task.CreatedDate = existingTask.CreatedDate; 
+                existingTask.Status = updatedTaskData.Status;
+
+              
+                if (existingTask.Status == GorevTakipSistemi.Models.TaskStatus.İşlemeAlındı.ToString())
+                {
+                    existingTask.StartDate = DateTime.Now;
+                }
+               
+                else if (existingTask.Status == GorevTakipSistemi.Models.TaskStatus.Beklemede.ToString())
+                {
+                    existingTask.StartDate = null;
+                }
+               
             }
+
 
           
-            if (string.IsNullOrEmpty(task.Title) && isAdmin)
+            if (isAdmin)
             {
-                ModelState.AddModelError("Title", "Başlık alanı boş olamaz.");
-            }
-            if (string.IsNullOrEmpty(task.Description) && isAdmin)
-            {
-                ModelState.AddModelError("Description", "Açıklama alanı boş olamaz.");
-            }
-            if (task.AssignedUserId == 0 && isAdmin)
-            {
-                 ModelState.AddModelError("AssignedUserId", "Atanacak kullanıcı seçimi zorunludur.");
-            }
-            else if (isAdmin) 
-            {
-                var selectedUserExists = await _context.Users.AnyAsync(u => u.Id == task.AssignedUserId);
-                if (!selectedUserExists)
+                existingTask.Title = task.Title;
+                existingTask.Description = task.Description;
+                existingTask.AssignedUserId = task.AssignedUserId;
+
+                string currentExistingImagePath = existingTask.ImagePath;
+                if (imageFile != null && imageFile.Length > 0)
                 {
-                    ModelState.AddModelError("AssignedUserId", "Seçilen kullanıcı bulunamadı.");
-                }
-            }
-
-
-            if (ModelState.IsValid)
-            {
-                try
-                {
-                    
-                    _context.Entry(existingTask).CurrentValues.SetValues(task); 
-
-                   
-                    existingTask.LastUpdatedDate = DateTime.Now;
-
-             
-                    if (isAssignedUser && !isAdmin) 
+                    const long MaxFileSize = 5 * 1024 * 1024; // 5 MB
+                    if (imageFile.Length > MaxFileSize)
                     {
-                        
-                        _context.Entry(existingTask).Property(t => t.Status).IsModified = true;
-                        _context.Entry(existingTask).Property(t => t.CompletionDate).IsModified = true;
-                     
-                        _context.Entry(existingTask).Property(t => t.Title).IsModified = false;
-                        _context.Entry(existingTask).Property(t => t.Description).IsModified = false;
-                        _context.Entry(existingTask).Property(t => t.AssignedUserId).IsModified = false;
-                        _context.Entry(existingTask).Property(t => t.CreatedDate).IsModified = false; 
-                        _context.Entry(existingTask).Property(t => t.ImagePath).IsModified = false;
-                    }
-                    else if (isAdmin) 
-                    {
+                        ModelState.AddModelError("imageFile", "Görsel boyutu 5 MB'ı aşamaz.");
                        
-                        _context.Entry(existingTask).Property(t => t.Title).IsModified = true;
-                        _context.Entry(existingTask).Property(t => t.Description).IsModified = true;
-                        _context.Entry(existingTask).Property(t => t.AssignedUserId).IsModified = true;
-                        _context.Entry(existingTask).Property(t => t.Status).IsModified = false; 
-                        _context.Entry(existingTask).Property(t => t.CompletionDate).IsModified = true;
-                        _context.Entry(existingTask).Property(t => t.CreatedDate).IsModified = false; 
+                        TempData["ErrorMessage"] = "Görsel boyutu 5 MB'ı aşıyor.";
                         
-                      
-                        if (imageFile != null && imageFile.Length > 0)
-                        {
-                          
-                            if (!string.IsNullOrEmpty(existingTask.ImagePath))
-                            {
-                                var oldImagePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot/images", existingTask.ImagePath);
-                                if (System.IO.File.Exists(oldImagePath))
-                                {
-                                    System.IO.File.Delete(oldImagePath);
-                                }
-                            }
-
-                            var fileName = Path.GetFileNameWithoutExtension(imageFile.FileName);
-                            var extension = Path.GetExtension(imageFile.FileName);
-                            existingTask.ImagePath = fileName = fileName + DateTime.Now.ToString("yymmssfff") + extension;
-                            var path = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot/images", fileName);
-                            using (var stream = new FileStream(path, FileMode.Create))
-                            {
-                                await imageFile.CopyToAsync(stream);
-                            }
-                            _context.Entry(existingTask).Property(t => t.ImagePath).IsModified = true;
-                        }
-                        else
-                        {
-                           
-                             _context.Entry(existingTask).Property(t => t.ImagePath).IsModified = false;
-                        }
+                        return RedirectToAction(nameof(Edit), new { id = id });
                     }
 
-                    await _context.SaveChangesAsync();
-                    TempData["SuccessMessage"] = "Görev başarıyla güncellendi.";
-                    return RedirectToAction(nameof(Index));
-                }
-                catch (DbUpdateConcurrencyException)
-                {
-                    if (!TaskExists(existingTask.Id))
+                    var AllowedImageMimeTypes = new[] { "image/jpeg", "image/png", "image/gif" };
+                    if (!AllowedImageMimeTypes.Contains(imageFile.ContentType))
                     {
-                        TempData["ErrorMessage"] = "Görev veritabanında bulunamadı. Başka bir kullanıcı tarafından silinmiş olabilir.";
-                        return NotFound();
-                    }
-                    else
-                    {
-                        TempData["ErrorMessage"] = "Görev güncellenirken bir çakışma oluştu. Lütfen tekrar deneyin.";
-                        var users = await _context.Users.ToListAsync();
-                        ViewData["AssignedUserId"] = new SelectList(users, "Id", "Username", existingTask.AssignedUserId);
-                        return View(existingTask);
+                        ModelState.AddModelError("imageFile", "Sadece JPG, PNG veya GIF formatında görseller yüklenebilir.");
+                        TempData["ErrorMessage"] = "Geçersiz görsel formatı. Sadece JPG, PNG, GIF desteklenir.";
+                        return RedirectToAction(nameof(Edit), new { id = id });
                     }
                 }
-                catch (Exception ex)
+
+                if (removeImage && !string.IsNullOrEmpty(existingTask.ImagePath))
                 {
-                    TempData["ErrorMessage"] = $"Görev güncellenirken bir hata oluştu: {ex.Message}";
+                    var oldImagePath = Path.Combine(_hostEnvironment.WebRootPath, existingTask.ImagePath);
+                    if (System.IO.File.Exists(oldImagePath))
+                    {
+                        System.IO.File.Delete(oldImagePath);
+                    }
+                    existingTask.ImagePath = null;
+                }
+                if (imageFile != null)
+                {
+                    string uploadsFolder = Path.Combine(_hostEnvironment.WebRootPath, "images");
+                    if (!Directory.Exists(uploadsFolder))
+                    {
+                        Directory.CreateDirectory(uploadsFolder);
+                    }
+                    string fileExtension = Path.GetExtension(imageFile.FileName).ToLowerInvariant();
+                    string uniqueFileName = Guid.NewGuid().ToString() + fileExtension;
+                    string filePath = Path.Combine(uploadsFolder, uniqueFileName);
+                    using (var fileStream = new FileStream(filePath, FileMode.Create))
+                    {
+                        await imageFile.CopyToAsync(fileStream);
+                    }
+                    existingTask.ImagePath = "images/" + uniqueFileName;
+                }
+                existingTask.StartDate = DateTime.Now;
+
+                _context.Entry(existingTask).State = EntityState.Modified;
+            }
+
+
+            
+            if (isAssignedUser && existingTask.Status != oldStatus)
+            {
+                if (existingTask.Status == GorevTakipSistemi.Models.TaskStatus.Tamamlandı.ToString())
+                {
+                    if (!existingTask.CompletionDate.HasValue)
+                    {
+                        existingTask.CompletionDate = DateTime.Now;
+                    }
+                }
+                else if (oldStatus == GorevTakipSistemi.Models.TaskStatus.Tamamlandı.ToString() && existingTask.Status != GorevTakipSistemi.Models.TaskStatus.Tamamlandı.ToString())
+                {
+                    existingTask.CompletionDate = null;
+                }
+            }
+
+            try
+            {
+                _context.Update(existingTask);
+                await _context.SaveChangesAsync();
+                TempData["SuccessMessage"] = "Görev başarıyla güncellendi.";
+                return RedirectToAction(nameof(Index));
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                if (!TaskExists(existingTask.Id))
+                {
+                    TempData["ErrorMessage"] = "Görev veritabanında bulunamadı. Başka bir kullanıcı tarafından silinmiş olabilir.";
+                    return NotFound();
+                }
+                else
+                {
+                    TempData["ErrorMessage"] = "Görev güncellenirken bir çakışma oluştu. Lütfen tekrar deneyin.";
                     var users = await _context.Users.ToListAsync();
                     ViewData["AssignedUserId"] = new SelectList(users, "Id", "Username", existingTask.AssignedUserId);
                     return View(existingTask);
                 }
             }
-
-           
-            StringBuilder errorMessages = new StringBuilder();
-            errorMessages.AppendLine("Görev güncellenemedi. Lütfen hataları düzeltin:");
-            foreach (var modelStateEntry in ModelState.Values)
+            catch (Exception ex)
             {
-                foreach (var error in modelStateEntry.Errors)
-                {
-                    if (!string.IsNullOrEmpty(error.ErrorMessage))
-                    {
-                        errorMessages.AppendLine($"- {error.ErrorMessage}");
-                    }
-                    else if (error.Exception != null)
-                    {
-                        errorMessages.AppendLine($"- {error.Exception.Message}");
-                    }
-                }
+                TempData["ErrorMessage"] = $"Görev güncellenirken bir hata oluştu: {ex.Message}";
+                var users = await _context.Users.ToListAsync();
+                ViewData["AssignedUserId"] = new SelectList(users, "Id", "Username", existingTask.AssignedUserId);
+                return View(existingTask);
             }
-            TempData["ErrorMessage"] = errorMessages.ToString();
-            var usersList = await _context.Users.ToListAsync();
-            ViewData["AssignedUserId"] = new SelectList(usersList, "Id", "Username", task.AssignedUserId);
-           
-            task.Status = existingTask.Status;
-            task.AssignedUserId = existingTask.AssignedUserId;
-            task.ImagePath = existingTask.ImagePath; 
-            return View(task); 
         }
 
-
-        // GET: Task/Delete/5 (Görev Silme Onay Sayfası)
-        [Authorize(Roles = "Admin")] 
+        // GET: Task/Delete/5
         public async Task<IActionResult> Delete(int? id)
         {
             if (id == null)
@@ -409,31 +400,40 @@ namespace GorevTakipSistemi.Controllers
                 return NotFound();
             }
 
+            
+            if (!User.IsInRole(UserRole.Admin.ToString()))
+            {
+                TempData["ErrorMessage"] = "Görev silme yetkiniz yok.";
+                return Forbid();
+            }
+
             return View(task);
         }
 
-        // POST: Task/Delete/5 (Görev Silme İşlemi)
-        [HttpPost, ActionName("Delete")] 
-        [ValidateAntiForgeryToken] 
-        [Authorize(Roles = "Admin")] 
+        // POST: Task/Delete/5
+        [HttpPost, ActionName("Delete")]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
+            
+            if (!User.IsInRole(UserRole.Admin.ToString()))
+            {
+                TempData["ErrorMessage"] = "Görev silme yetkiniz yok.";
+                return Forbid();
+            }
+
             var task = await _context.Tasks.FindAsync(id);
             if (task != null)
             {
-               
-                var messages = await _context.Messages.Where(m => m.TaskId == id).ToListAsync();
-                _context.Messages.RemoveRange(messages);
-
+                
                 if (!string.IsNullOrEmpty(task.ImagePath))
                 {
-                    var imagePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot/images", task.ImagePath);
-                    if (System.IO.File.Exists(imagePath))
+                    string filePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", task.ImagePath);
+                    if (System.IO.File.Exists(filePath))
                     {
-                        System.IO.File.Delete(imagePath);
+                        System.IO.File.Delete(filePath);
                     }
                 }
-
                 _context.Tasks.Remove(task);
             }
 
@@ -442,7 +442,6 @@ namespace GorevTakipSistemi.Controllers
             return RedirectToAction(nameof(Index));
         }
 
-        // Görevin veritabanında olup olmadığını kontrol eder
         private bool TaskExists(int id)
         {
             return _context.Tasks.Any(e => e.Id == id);

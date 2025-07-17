@@ -20,7 +20,7 @@
 }
 
 <div>
-    <h4>Görev</h4>
+    <h4>Görev Bilgileri</h4> 
     <hr />
     <dl class="row">
         <dt class="col-sm-3">
@@ -45,7 +45,8 @@
             @Html.DisplayNameFor(model => model.AssignedUser)
         </dt>
         <dd class="col-sm-9">
-            @Html.DisplayFor(model => model.AssignedUser.Username)
+           
+            @(Model.AssignedUser != null ? Model.AssignedUser.Username : "Atanmamış/Kullanıcı Yok")
         </dd>
         <dt class="col-sm-3">
             @Html.DisplayNameFor(model => model.CreatedDate)
@@ -54,10 +55,10 @@
             @Model.CreatedDate.ToString("dd.MM.yyyy HH:mm")
         </dd>
         <dt class="col-sm-3">
-            @Html.DisplayNameFor(model => model.LastUpdatedDate)
+            @Html.DisplayNameFor(model => model.StartDate)
         </dt>
         <dd class="col-sm-9">
-            @(Model.LastUpdatedDate.HasValue ? Model.LastUpdatedDate.Value.ToString("dd.MM.yyyy HH:mm") : "N/A")
+            @(Model.StartDate.HasValue ? Model.StartDate.Value.ToString("dd.MM.yyyy HH:mm") : "N/A")
         </dd>
         <dt class="col-sm-3">
             @Html.DisplayNameFor(model => model.CompletionDate)
@@ -65,10 +66,27 @@
         <dd class="col-sm-9">
             @(Model.CompletionDate.HasValue ? Model.CompletionDate.Value.ToString("dd.MM.yyyy HH:mm") : "N/A")
         </dd>
+
+
+        <dt class="col-sm-3">
+            Görsel
+        </dt>
+        <dd class="col-sm-9">
+            @if (!string.IsNullOrEmpty(Model.ImagePath))
+            {
+                <img src="~/@Model.ImagePath" alt="Görev Görseli" class="img-fluid border rounded" style="max-width: 400px; height: auto;" />
+            }
+            else
+            {
+                <span>Görsel Eklenmemiş</span>
+            }
+        </dd>
+ 
     </dl>
 </div>
 
-<div class="mt-4">
+<div class="mt-4 mb-5">
+  
     <a asp-action="Edit" asp-route-id="@Model.Id" class="btn btn-info">Düzenle</a>
     <a asp-action="Index" class="btn btn-secondary">Listeye Geri Dön</a>
     @if (User.IsInRole("Admin"))
@@ -76,40 +94,5 @@
         <a asp-action="Delete" asp-route-id="@Model.Id" class="btn btn-danger">Sil</a>
     }
 </div>
-
-<h4 class="mt-5">Mesajlar</h4>
-<hr />
-
-@if (Model.Messages != null && Model.Messages.Any())
-{
-    <div class="list-group">
-        @foreach (var message in Model.Messages.OrderBy(m => m.SentDate))
-        {
-            <div class="list-group-item list-group-item-action flex-column align-items-start mb-2">
-                <div class="d-flex w-100 justify-content-between">
-                    <h5 class="mb-1">@message.Sender.Username</h5>
-                    <small>@message.SentDate.ToString("dd.MM.yyyy HH:mm")</small>
-                </div>
-                <p class="mb-1">@message.Content</p>
-            </div>
-        }
-    </div>
-}
-else
-{
-    <p>Bu görevle ilgili henüz mesaj bulunmamaktadır.</p>
-}
-
-<h4 class="mt-5">Mesaj Gönder</h4>
-<hr />
-<div class="card p-3 mb-5">
-    <form asp-controller="Task" asp-action="AddMessage" method="post">
-        <input type="hidden" name="taskId" value="@Model.Id" />
-        <div class="form-group">
-            <label for="messageContent">Mesajınız:</label>
-            <textarea name="messageContent" class="form-control" rows="3" placeholder="Mesajınızı buraya yazın..."></textarea>
-            
-        </div>
-        <button type="submit" class="btn btn-primary mt-3">Gönder</button>
-    </form>
-</div>
+       
+        

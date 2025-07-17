@@ -1,5 +1,5 @@
 ﻿using System.ComponentModel.DataAnnotations;
-using Microsoft.AspNetCore.Mvc.Rendering; // SelectList için
+
 
 namespace GorevTakipSistemi.ViewModels
 {

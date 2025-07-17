@@ -13,7 +13,7 @@ namespace GorevTakipSistemi.Data
         public DbSet<User> Users { get; set; }
         public DbSet<GorevTakipSistemi.Models.Task> Tasks { get; set; }
 
-        public DbSet<Message> Messages { get; set; }
+       
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -37,19 +37,6 @@ namespace GorevTakipSistemi.Data
                 .HasForeignKey(t => t.AssignedUserId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            modelBuilder.Entity<Message>()
-                .HasOne(m => m.Task) 
-                .WithMany(t => t.Messages)
-                .HasForeignKey(m => m.TaskId) 
-                .OnDelete(DeleteBehavior.Cascade); 
-
-            // Message ve User (Sender) arasındaki ilişki
-
-            modelBuilder.Entity<Message>()
-                .HasOne(m => m.Sender) 
-                .WithMany() 
-                .HasForeignKey(m => m.SenderId) 
-                .OnDelete(DeleteBehavior.Restrict); 
         }
     }
 }

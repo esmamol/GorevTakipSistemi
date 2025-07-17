@@ -62,7 +62,7 @@
                         @item.CreatedDate.ToString("dd.MM.yyyy HH:mm")
                     </td>
                     <td>
-                        @(item.LastUpdatedDate.HasValue ? item.LastUpdatedDate.Value.ToString("dd.MM.yyyy HH:mm") : "N/A")
+                        @(item.StartDate.HasValue ? item.StartDate.Value.ToString("dd.MM.yyyy HH:mm") : "N/A")
                     </td>
                     <td>
                         @(item.CompletionDate.HasValue ? item.CompletionDate.Value.ToString("dd.MM.yyyy HH:mm") : "N/A")

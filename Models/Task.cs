@@ -28,8 +28,8 @@ namespace GorevTakipSistemi.Models
         [Display(Name = "Oluşturulma Tarihi")]
         public DateTime CreatedDate { get; set; } = DateTime.Now; 
 
-        [Display(Name = "Son Güncelleme Tarihi")]
-        public DateTime? LastUpdatedDate { get; set; }
+        [Display(Name = "Başlanma Tarihi")]
+        public DateTime? StartDate { get; set; }
 
         [Display(Name = "Tamamlanma Tarihi")]
         public DateTime? CompletionDate { get; set; }
@@ -38,7 +38,7 @@ namespace GorevTakipSistemi.Models
         public string? ImagePath { get; set; }
 
 
-        public List<Message> Messages { get; set; } = new List<Message>();
+        
        
     }
 }

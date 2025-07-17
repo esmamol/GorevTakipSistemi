@@ -1,98 +1,89 @@
 ﻿@model GorevTakipSistemi.Models.Task
+@using GorevTakipSistemi.Models // TaskStatus ve UserRole enum'ları için
 
 @{
     ViewData["Title"] = "Görevi Düzenle";
+    
+    var isAdmin = User.IsInRole(UserRole.Admin.ToString());
 }
 
-<h1>Görevi Düzenle</h1>
+<h1>@ViewData["Title"]</h1>
 
 <h4>Görev</h4>
 <hr />
 <div class="row">
-    <div class="col-md-4">
-        <form asp-action="Edit">
+    <div class="col-md-6">
+        <form asp-action="Edit" enctype="multipart/form-data">
             <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
             <input type="hidden" asp-for="Id" />
-            <div class="form-group">
-                <label asp-for="Title" class="control-label"></label>
-                <input asp-for="Title" class="form-control" />
-                <span asp-validation-for="Title" class="text-danger"></span>
-            </div>
-            <div class="form-group">
-                <label asp-for="Description" class="control-label"></label>
-                <textarea asp-for="Description" class="form-control"></textarea>
-                <span asp-validation-for="Description" class="text-danger"></span>
-            </div>
 
-            <div class="form-group">
-                <label asp-for="Status" class="control-label"></label>
-                @{
-                    bool isAdmin = User.IsInRole("Admin");
-                  
-                    int currentUserId = Convert.ToInt32(User.FindFirstValue(ClaimTypes.NameIdentifier));
-            
-                    bool isAssignedUser = (Model.AssignedUserId == currentUserId);
+            @if (isAdmin)
+            {
+                <h3>Admin Yetkileriyle Düzenleme</h3>
+                
+                <div class="form-group mb-3">
+                    <label asp-for="Title" class="control-label"></label>
+                    <input asp-for="Title" class="form-control" />
+                    <span asp-validation-for="Title" class="text-danger"></span>
+                </div>
+                <div class="form-group mb-3">
+                    <label asp-for="Description" class="control-label"></label>
+                    <textarea asp-for="Description" class="form-control" rows="5"></textarea>
+                    <span asp-validation-for="Description" class="text-danger"></span>
+                </div>
+                <div class="form-group mb-3">
+                    <label asp-for="AssignedUserId" class="control-label">Atanan Kullanıcı</label>
+                    <select asp-for="AssignedUserId" class="form-control" asp-items="ViewBag.AssignedUserId"></select>
+                    <span asp-validation-for="AssignedUserId" class="text-danger"></span>
+                </div>
 
-                   
-                    if (!isAdmin || isAssignedUser)
+                
+                <div class="form-group mb-3">
+                    <label asp-for="ImagePath" class="control-label">Görsel</label>
+                    @if (!string.IsNullOrEmpty(Model.ImagePath))
                     {
-
-                       // SELECT (dropdown) kullanılıyorsa:
-                        <select asp-for="Status" class="form-control">
-                            <option value="Beklemede">Beklemede</option>
-                            <option value="Devam Ediyor">Devam Ediyor</option>
-                            <option value="Tamamlandı">Tamamlandı</option>
-                            <option value="İptal Edildi">İptal Edildi</option>
-                        </select>
+                        <div class="mb-2">
+                            <img src="~/@Model.ImagePath" alt="Görev Görseli" style="max-width: 200px; max-height: 200px;" />
+                        </div>
+                        <div class="form-check mb-2">
+                            <input type="checkbox" class="form-check-input" id="removeImage" name="removeImage" value="true" />
+                            <label class="form-check-label" for="removeImage">Mevcut Görseli Kaldır</label>
+                        </div>
                     }
-                    else 
-                    {
-                       
-                        <input asp-for="Status" class="form-control" readonly />
-                        <input type="hidden" asp-for="Status" />
-                    }
-                }
-                <span asp-validation-for="Status" class="text-danger"></span>
-            </div>
+                    <input type="file" name="imageFile" class="form-control" />
+                    <span asp-validation-for="ImagePath" class="text-danger"></span>
+                </div>
 
-          <div class="form-group">
-                <label asp-for="AssignedUserId" class="control-label"></label>
-                @if (User.IsInRole("Admin"))
-                {
-                    <select asp-for="AssignedUserId" class="form-control" asp-items="@(ViewData["AssignedUserId"] as SelectList)"></select>
-                }
-                else
-                {
-                    <input asp-for="AssignedUser.Username" class="form-control" readonly />
-                    <input type="hidden" asp-for="AssignedUserId" /> }
-                <span asp-validation-for="AssignedUserId" class="text-danger"></span>
-            </div>
+                
+                <input type="hidden" asp-for="Status" />
+                <input type="hidden" asp-for="CreatedDate" />
+                <input type="hidden" asp-for="StartDate" />
+                <input type="hidden" asp-for="CompletionDate" />
+            }
+            else
+            {
+                <h3>Kullanıcı Yetkileriyle Düzenleme</h3>
+           
+                <div class="form-group mb-3">
+                    <label asp-for="Status" class="control-label"></label>
+                    <select asp-for="Status" class="form-control">
+                        <option value="@GorevTakipSistemi.Models.TaskStatus.Beklemede">Beklemede</option>
+                        <option value="@GorevTakipSistemi.Models.TaskStatus.İşlemeAlındı">İşleme Alındı</option>
+                        <option value="@GorevTakipSistemi.Models.TaskStatus.Tamamlandı">Tamamlandı</option>
+                    </select>
+                    <span asp-validation-for="Status" class="text-danger"></span>
+                </div>
 
-
-            <div class="form-group">
-                <label asp-for="CreatedDate" class="control-label"></label>
-                <input asp-for="CreatedDate" class="form-control" readonly />
-            </div>
-            <div class="form-group">
-                <label asp-for="LastUpdatedDate" class="control-label"></label>
-                <input asp-for="LastUpdatedDate" class="form-control" readonly />
-            </div>
-            <div class="form-group">
-                <label asp-for="CompletionDate" class="control-label"></label>
-                <input asp-for="CompletionDate" class="form-control" />
-                <span asp-validation-for="CompletionDate" class="text-danger"></span>
-            </div>
-
-            <div class="form-group">
-                <label asp-for="ImagePath" class="control-label"></label>
-                <input type="file" name="imageFile" class="form-control" />
-                @if (!string.IsNullOrEmpty(Model.ImagePath))
-                {
-                    <img src="~/images/@Model.ImagePath" alt="Görev Görseli" style="max-width: 200px; margin-top: 10px;" />
-                }
-                <span asp-validation-for="ImagePath" class="text-danger"></span>
-            </div>
-
+               
+                <input type="hidden" asp-for="Title" />
+                <input type="hidden" asp-for="Description" />
+                <input type="hidden" asp-for="AssignedUserId" />
+                <input type="hidden" asp-for="CreatedDate" />
+                <input type="hidden" asp-for="StartDate" />
+                <input type="hidden" asp-for="CompletionDate" />
+                <input type="hidden" asp-for="ImagePath" />
+            }
 
             <div class="form-group">
                 <input type="submit" value="Kaydet" class="btn btn-primary" />

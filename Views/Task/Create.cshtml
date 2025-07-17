@@ -1,5 +1,4 @@
-﻿@model GorevTakipSistemi.Models.Task 
-
+﻿@model GorevTakipSistemi.ViewModels.CreateTaskViewModel
 @{
     ViewData["Title"] = "Yeni Görev Oluştur";
 }
@@ -21,8 +20,9 @@
 
 <div class="row">
     <div class="col-md-6">
-        <form asp-action="Create">
+        <form asp-action="Create" enctype="multipart/form-data"> @* Görsel yüklemek için bu ZORUNLU! *@
             <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            
             <div class="form-group mb-3">
                 <label asp-for="Title" class="control-label"></label>
                 <input asp-for="Title" class="form-control" />
@@ -33,24 +33,23 @@
                 <textarea asp-for="Description" class="form-control" rows="3"></textarea>
                 <span asp-validation-for="Description" class="text-danger"></span>
             </div>
-            <div class="form-group mb-3">
-                <label asp-for="Status" class="control-label"></label>
-                <select asp-for="Status" class="form-control">
-                    <option value="Beklemede">Beklemede</option>
-                    <option value="İşleme Alındı">İşleme Alındı</option>
-                    <option value="Tamamlandı">Tamamlandı</option>
-                </select>
-                <span asp-validation-for="Status" class="text-danger"></span>
-            </div>
+            
+           
+            
             <div class="form-group mb-3">
                 <label asp-for="AssignedUserId" class="control-label"></label>
                 <select asp-for="AssignedUserId" class="form-control" asp-items="ViewBag.AssignedUserId">
-                    <option value="">-- Kullanıcı Seç --</option> @* Seçim yapılmadığında hata vermesi için *@
+                    <option value="">-- Kullanıcı Seç --</option> 
                 </select>
                 <span asp-validation-for="AssignedUserId" class="text-danger"></span>
             </div>
 
-            @* Tarih alanları otomatik atandığı için burada kullanıcıdan alınmaz, readonly olarak da gösterilmez. *@
+            @* YENİ: Görsel yükleme alanı (zorunlu değil) *@
+            <div class="form-group mb-3">
+                <label for="imageFile" class="control-label">Görsel (İsteğe Bağlı)</label>
+                <input type="file" id="imageFile" name="imageFile" class="form-control" accept="image/jpeg,image/png,image/gif" onchange="validateImageFile(this)" />
+                <span id="imageFileError" class="text-danger"></span>
+            </div>
 
             <div class="form-group mt-4">
                 <input type="submit" value="Oluştur" class="btn btn-primary" />
@@ -62,4 +61,40 @@
 
 @section Scripts {
     @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+
+    <script>
+        function validateImageFile(input) {
+            const maxFileSizeMB = 5; // MB
+            const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+            const fileErrorSpan = document.getElementById('imageFileError');
+            fileErrorSpan.textContent = ''; // Önceki hataları temizle
+
+            if (input.files.length > 0) {
+                const file = input.files[0];
+                const fileSize = file.size; // Bytes
+                const fileType = file.type;
+                const maxSizeBytes = maxFileSizeMB * 1024 * 1024;
+
+                let isValid = true;
+
+                if (fileSize > maxSizeBytes) {
+                    fileErrorSpan.textContent = `Görsel boyutu ${maxFileSizeMB} MB'ı aşamaz.`;
+                    isValid = false;
+                }
+
+                if (!allowedTypes.includes(fileType)) {
+                   
+                    if (fileErrorSpan.textContent !== '') {
+                        fileErrorSpan.textContent += '\n';
+                    }
+                    fileErrorSpan.textContent += 'Sadece JPG, PNG veya GIF formatında görseller yüklenebilir.';
+                    isValid = false;
+                }
+
+                if (!isValid) {
+                    input.value = ''; // Geçersiz dosyayı temizle
+                }
+            }
+        }
+    </script>
 }
